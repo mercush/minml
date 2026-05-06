@@ -81,13 +81,6 @@ cmake --build build -j
 ./build/example
 ```
 
-### CUDA
-
-```bash
-cmake -S . -B build -DMINML_BUILD_CUDA=ON
-cmake --build build -j
-```
-
 ### WebGPU, native (Dawn)
 
 Build Dawn separately, then point CMake at it:
@@ -101,10 +94,12 @@ cmake --build build -j
 You'll need to call `webgpu_init_with_device(...)` from your application
 with a Dawn-acquired device.
 
-### Python
+### Python + CUDA
 
 ```bash
-pip install nanobind
+uv venv
+source .venv/bin/activate
+uv pip install nanobind
 cmake -S . -B build -DMINML_BUILD_PYTHON=ON -DMINML_BUILD_CUDA=ON
 cmake --build build -j
 PYTHONPATH=build python examples/example.py
