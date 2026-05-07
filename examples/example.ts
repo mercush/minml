@@ -1,15 +1,18 @@
 // Browser entry point for the minml WASM demo on the WebGPU backend.
 //
-// The build outputs minml_js.{js,wasm} to ../build. If you'd rather keep
-// the page self-contained, `cp build/minml_js.* examples/` and change
-// the import path below.
-//
-// initWebGPU() suspends inside WASM (via ASYNCIFY) while it acquires an
-// adapter and device through navigator.gpu. tolist() and item() also
-// suspend on WebGPU readback (mapAsync), so they're awaited on the JS side.
-// Everything else (array construction, add, dot building the lazy graph)
-// stays synchronous.
-import createMinml from "../build/minml_js.js";
+// The wasm-bindgen output lives at ../crates/minml-wasm/pkg/. `await init()`
+// instantiates the wasm module; `await initWebGPU()` acquires the
+// adapter+device through wgpu (which uses navigator.gpu under the hood —
+// no Asyncify, no spin loop). Readbacks (tolist, item) are real Promises
+// driven by Buffer::slice.map_async.
+import init, {
+  Device,
+  array,
+  add,
+  dot,
+  initWebGPU,
+  setDefaultDevice,
+} from "../crates/minml-wasm/pkg/minml_wasm.js";
 
 const out = document.getElementById("out")!;
 out.textContent = "";
@@ -22,18 +25,18 @@ try {
     throw new Error("WebGPU is not available in this browser");
   }
 
-  const m = await createMinml();
-  await m.initWebGPU();
-  m.setDefaultDevice(m.Device.WebGPU);
+  await init();
+  await initWebGPU();
+  setDefaultDevice(Device.WebGPU);
 
-  const x = m.array([1, 2, 3, 4], m.Device.WebGPU);
-  const y = m.array([10, 20, 30, 40], m.Device.WebGPU);
+  const x = array(new Float32Array([1, 2, 3, 4]), Device.WebGPU);
+  const y = array(new Float32Array([10, 20, 30, 40]), Device.WebGPU);
 
-  log("add -> " + (await m.add(x, y).tolist()).join(", "));
-  log("dot -> " + (await m.dot(x, y).item()));
+  log("add -> " + (await add(x, y).tolist()).join(", "));
+  log("dot -> " + (await dot(x, y).item()));
   log(
     "dot(x+y, x+y) -> " +
-      (await m.dot(m.add(x, y), m.add(x, y)).item()),
+      (await dot(add(x, y), add(x, y)).item()),
   );
 } catch (err) {
   log("error: " + err);

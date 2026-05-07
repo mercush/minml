@@ -1,2 +1,6 @@
 .venv
 build
+target/
+pkg/
+examples/example.js
+.cargo

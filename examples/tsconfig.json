@@ -7,5 +7,5 @@
     "lib": ["ES2022", "DOM"],
     "skipLibCheck": true
   },
-  "include": ["example.ts", "minml_js.d.ts"]
+  "include": ["example.ts"]
 }

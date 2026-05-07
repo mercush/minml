@@ -1,0 +1,13 @@
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "minml"
+version = "0.1.0"
+description = "Minimal multi-backend tensor library (Rust core, async API)"
+requires-python = ">=3.9"
+
+[tool.maturin]
+module-name = "_minml"
+features = ["pyo3/extension-module"]
