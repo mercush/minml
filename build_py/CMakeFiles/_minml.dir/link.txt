@@ -1,1 +1,0 @@
-/usr/bin/c++  -arch arm64 -bundle -Wl,-headerpad_max_install_names -Wl,@/Users/mauriciobarbadacosta/Downloads/minml/.venv/lib/python3.12/site-packages/nanobind/cmake/darwin-ld-cpython.sym -o _minml.cpython-312-darwin.so CMakeFiles/_minml.dir/bindings/python/bind.cpp.o  libnanobind-static.a libminml.a

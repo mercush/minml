@@ -1,2 +1,0 @@
-/usr/bin/ar qc libminml.a CMakeFiles/minml.dir/src/device.cpp.o CMakeFiles/minml.dir/src/dtype.cpp.o CMakeFiles/minml.dir/src/array.cpp.o CMakeFiles/minml.dir/src/ops.cpp.o CMakeFiles/minml.dir/src/cpu_backend.cpp.o CMakeFiles/minml.dir/src/cpu_random.cpp.o CMakeFiles/minml.dir/src/prng.cpp.o CMakeFiles/minml.dir/src/distributions.cpp.o CMakeFiles/minml.dir/src/transforms.cpp.o CMakeFiles/minml.dir/src/stubs.cpp.o
-/usr/bin/ranlib libminml.a
