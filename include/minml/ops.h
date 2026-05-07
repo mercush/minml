@@ -5,6 +5,7 @@
 // or run kernels until eval().
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 

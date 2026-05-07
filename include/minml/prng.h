@@ -8,6 +8,7 @@
 // PRNGKey::from_seed(new_seed).
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
