@@ -10,11 +10,12 @@
 
 namespace minml {
 
-enum class DType { Float32 };
+enum class DType { Float32, Int32 };
 
 inline constexpr size_t dtype_bytes(DType t) {
   switch (t) {
     case DType::Float32: return 4;
+    case DType::Int32:   return 4;
   }
   return 0;
 }

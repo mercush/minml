@@ -18,6 +18,10 @@ set(MINML_SOURCES
   src/array.cpp
   src/ops.cpp
   src/cpu_backend.cpp
+  src/cpu_random.cpp
+  src/prng.cpp
+  src/distributions.cpp
+  src/transforms.cpp
   src/stubs.cpp
 )
 set(MINML_DEFS MINML_HAS_CPU)
@@ -99,5 +103,6 @@ if(MINML_BUILD_TS)
     "-sEXPORT_NAME=createMinml"
     "-sENVIRONMENT=web,node"
     "-sEXPORT_ES6=1"
-    "-sALLOW_MEMORY_GROWTH=1")
+    "-sALLOW_MEMORY_GROWTH=1"
+    "-sNO_DISABLE_EXCEPTION_CATCHING=1")
 endif()
