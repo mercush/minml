@@ -15,6 +15,7 @@
 
 #include "minml/array.h"
 #include "minml/device.h"
+#include "minml/dtype.h"
 #include "minml/ops.h"
 
 namespace nb = nanobind;
@@ -26,6 +27,9 @@ NB_MODULE(_minml, m) {
       .value("CUDA", Device::CUDA)
       .value("WebGPU", Device::WebGPU);
 
+  nb::enum_<DType>(m, "DType")
+      .value("Float32", DType::Float32);
+
   m.def("set_default_device", &set_default_device);
   m.def("default_device", &default_device);
 
@@ -34,6 +38,7 @@ NB_MODULE(_minml, m) {
            nb::arg("device") = Device::CPU)
       .def("size", &Array::size)
       .def("device", &Array::device)
+      .def("dtype", &Array::dtype)
       .def("eval", &Array::eval)
       .def("tolist", &Array::tolist)
       .def("item", &Array::item);
@@ -43,5 +48,6 @@ NB_MODULE(_minml, m) {
         nb::arg("data"), nb::arg("device") = Device::CPU);
 
   m.def("add", &add);
+  m.def("mul", &mul);
   m.def("dot", &dot);
 }

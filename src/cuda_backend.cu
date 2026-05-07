@@ -46,6 +46,12 @@ __global__ void add_kernel(const float* a, const float* b, float* out,
   if (i < n) out[i] = a[i] + b[i];
 }
 
+__global__ void mul_kernel(const float* a, const float* b, float* out,
+                           size_t n) {
+  size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i < n) out[i] = a[i] * b[i];
+}
+
 // One-block reduction: enough for a minimal demo. For longer vectors, split
 // into a multi-block first pass + a final reduction.
 __global__ void dot_kernel(const float* a, const float* b, float* out,
@@ -88,6 +94,14 @@ void cuda_add(const Array& a, const Array& b, Array& out) {
   int block = 256;
   int grid = static_cast<int>((n + block - 1) / block);
   add_kernel<<<grid, block>>>(data(a), data(b), data(out), n);
+  CUDA_CHECK(cudaGetLastError());
+}
+
+void cuda_mul(const Array& a, const Array& b, Array& out) {
+  size_t n = out.size();
+  int block = 256;
+  int grid = static_cast<int>((n + block - 1) / block);
+  mul_kernel<<<grid, block>>>(data(a), data(b), data(out), n);
   CUDA_CHECK(cudaGetLastError());
 }
 

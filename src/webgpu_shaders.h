@@ -23,6 +23,20 @@ fn main(@builtin(global_invocation_id) gid : vec3<u32>) {
 }
 )WGSL";
 
+inline constexpr const char* kMulWgsl = R"WGSL(
+@group(0) @binding(0) var<storage, read>        a   : array<f32>;
+@group(0) @binding(1) var<storage, read>        b   : array<f32>;
+@group(0) @binding(2) var<storage, read_write>  out : array<f32>;
+
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let i = gid.x;
+  if (i < arrayLength(&out)) {
+    out[i] = a[i] * b[i];
+  }
+}
+)WGSL";
+
 // Dot product. Each workgroup reduces its slice into scratch[0], then thread 0
 // of the workgroup adds it into out[0] using a CAS loop on the bit pattern
 // (WGSL has no f32 atomics; we cast to u32 and CAS). Plenty fast for a demo.

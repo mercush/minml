@@ -18,6 +18,7 @@
 
 #include "minml/array.h"
 #include "minml/device.h"
+#include "minml/dtype.h"
 #include "minml/ops.h"
 #include "minml/webgpu.h"
 
@@ -29,6 +30,14 @@ namespace {
 Array make_array(const val& js_arr, Device d) {
   std::vector<float> data = vecFromJSArray<float>(js_arr);
   return Array(std::move(data), d);
+}
+
+// Return a plain JS Array instead of an embind register_vector wrapper.
+// Plain arrays print and iterate naturally in REPLs/notebooks; users who
+// need a typed buffer can call Float32Array.from() themselves.
+val array_tolist(Array& self) {
+  std::vector<float> data = self.tolist();
+  return val::array(data.begin(), data.end());
 }
 
 // ---- WebGPU device acquisition -------------------------------------------
@@ -103,17 +112,20 @@ EMSCRIPTEN_BINDINGS(minml_module) {
       .value("CUDA", Device::CUDA)
       .value("WebGPU", Device::WebGPU);
 
+  enum_<DType>("DType")
+      .value("Float32", DType::Float32);
+
   class_<Array>("Array")
       .function("size", &Array::size)
       .function("device", &Array::device)
+      .function("dtype", &Array::dtype)
       .function("eval", &Array::eval)
-      .function("tolist", &Array::tolist)
+      .function("tolist", &array_tolist)
       .function("item", &Array::item);
-
-  register_vector<float>("VectorFloat");
 
   function("array", &make_array);
   function("add", &add);
+  function("mul", &mul);
   function("dot", &dot);
   function("setDefaultDevice", &set_default_device);
   function("initWebGPU", &init_webgpu);

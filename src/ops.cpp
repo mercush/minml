@@ -24,6 +24,12 @@ Array add(const Array& a, const Array& b) {
                std::vector<Array>{a, b});
 }
 
+Array mul(const Array& a, const Array& b) {
+  check_same(a, b);
+  return Array(a.size(), a.device(), std::make_shared<MulPrim>(),
+               std::vector<Array>{a, b});
+}
+
 Array dot(const Array& a, const Array& b) {
   check_same(a, b);
   return Array(/*size=*/1, a.device(), std::make_shared<DotPrim>(),
@@ -36,6 +42,14 @@ void AddPrim::eval(const std::vector<Array>& inputs, Array& out) {
     case Device::CPU: cpu_add(inputs[0], inputs[1], out); return;
     case Device::CUDA: cuda_add(inputs[0], inputs[1], out); return;
     case Device::WebGPU: webgpu_add(inputs[0], inputs[1], out); return;
+  }
+}
+
+void MulPrim::eval(const std::vector<Array>& inputs, Array& out) {
+  switch (out.device()) {
+    case Device::CPU: cpu_mul(inputs[0], inputs[1], out); return;
+    case Device::CUDA: cuda_mul(inputs[0], inputs[1], out); return;
+    case Device::WebGPU: webgpu_mul(inputs[0], inputs[1], out); return;
   }
 }
 

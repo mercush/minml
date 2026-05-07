@@ -29,7 +29,7 @@ try {
   const x = m.array([1, 2, 3, 4], m.Device.WebGPU);
   const y = m.array([10, 20, 30, 40], m.Device.WebGPU);
 
-  log("add -> " + Array.from(await m.add(x, y).tolist()).join(", "));
+  log("add -> " + (await m.add(x, y).tolist()).join(", "));
   log("dot -> " + (await m.dot(x, y).item()));
   log(
     "dot(x+y, x+y) -> " +

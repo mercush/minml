@@ -14,6 +14,7 @@ option(MINML_BUILD_EXAMPLES   "Build the C++ example"           ON)
 # ---- Core sources ----------------------------------------------------------
 set(MINML_SOURCES
   src/device.cpp
+  src/dtype.cpp
   src/array.cpp
   src/ops.cpp
   src/cpu_backend.cpp
@@ -96,7 +97,7 @@ if(MINML_BUILD_TS)
     "-lembind"
     "-sMODULARIZE=1"
     "-sEXPORT_NAME=createMinml"
-    "-sENVIRONMENT=web"
+    "-sENVIRONMENT=web,node"
     "-sEXPORT_ES6=1"
     "-sALLOW_MEMORY_GROWTH=1")
 endif()

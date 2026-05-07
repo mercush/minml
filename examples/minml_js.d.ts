@@ -4,6 +4,7 @@
 
 declare module "*/minml_js.js" {
   export type Device = { readonly value: number };
+  export type DType = { readonly value: number };
 
   export interface DeviceEnum {
     readonly CPU: Device;
@@ -11,10 +12,8 @@ declare module "*/minml_js.js" {
     readonly WebGPU: Device;
   }
 
-  // register_vector<float>("VectorFloat") in bindings/ts/bind.cpp.
-  export interface VectorFloat extends Iterable<number> {
-    size(): number;
-    get(i: number): number;
+  export interface DTypeEnum {
+    readonly Float32: DType;
   }
 
   // Renamed from "Array" so it doesn't shadow the JS built-in.
@@ -24,15 +23,18 @@ declare module "*/minml_js.js" {
   export interface MinmlArray {
     size(): number;
     device(): Device;
+    dtype(): DType;
     eval(): void;
-    tolist(): Promise<VectorFloat>;
+    tolist(): Promise<number[]>;
     item(): Promise<number>;
   }
 
   export interface MinmlModule {
     Device: DeviceEnum;
+    DType: DTypeEnum;
     array(data: number[], device: Device): MinmlArray;
     add(a: MinmlArray, b: MinmlArray): MinmlArray;
+    mul(a: MinmlArray, b: MinmlArray): MinmlArray;
     dot(a: MinmlArray, b: MinmlArray): MinmlArray;
     setDefaultDevice(d: Device): void;
     // Acquires a WebGPU adapter+device inside WASM and registers it with

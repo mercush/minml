@@ -27,6 +27,12 @@ class AddPrim : public Primitive {
   void eval(const std::vector<Array>& inputs, Array& output) override;
 };
 
+class MulPrim : public Primitive {
+ public:
+  const char* name() const override { return "mul"; }
+  void eval(const std::vector<Array>& inputs, Array& output) override;
+};
+
 class DotPrim : public Primitive {
  public:
   const char* name() const override { return "dot"; }

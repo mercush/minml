@@ -24,6 +24,7 @@ std::shared_ptr<Buffer> cpu_allocate(size_t) { fail("cpu"); }
 void cpu_copy_host_to_device(Buffer&, const float*, size_t) { fail("cpu"); }
 void cpu_copy_device_to_host(const Buffer&, float*, size_t) { fail("cpu"); }
 void cpu_add(const Array&, const Array&, Array&) { fail("cpu"); }
+void cpu_mul(const Array&, const Array&, Array&) { fail("cpu"); }
 void cpu_dot(const Array&, const Array&, Array&) { fail("cpu"); }
 #endif
 
@@ -32,6 +33,7 @@ std::shared_ptr<Buffer> cuda_allocate(size_t) { fail("cuda"); }
 void cuda_copy_host_to_device(Buffer&, const float*, size_t) { fail("cuda"); }
 void cuda_copy_device_to_host(const Buffer&, float*, size_t) { fail("cuda"); }
 void cuda_add(const Array&, const Array&, Array&) { fail("cuda"); }
+void cuda_mul(const Array&, const Array&, Array&) { fail("cuda"); }
 void cuda_dot(const Array&, const Array&, Array&) { fail("cuda"); }
 #endif
 
@@ -44,6 +46,7 @@ void webgpu_copy_device_to_host(const Buffer&, float*, size_t) {
   fail("webgpu");
 }
 void webgpu_add(const Array&, const Array&, Array&) { fail("webgpu"); }
+void webgpu_mul(const Array&, const Array&, Array&) { fail("webgpu"); }
 void webgpu_dot(const Array&, const Array&, Array&) { fail("webgpu"); }
 #endif
 

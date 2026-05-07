@@ -11,6 +11,9 @@ namespace minml {
 // Elementwise: out[i] = a[i] + b[i]. Sizes must match.
 Array add(const Array& a, const Array& b);
 
+// Elementwise: out[i] = a[i] * b[i]. Sizes must match.
+Array mul(const Array& a, const Array& b);
+
 // Reduction: out = sum(a[i] * b[i]). Sizes must match. Result is size==1.
 Array dot(const Array& a, const Array& b);
 

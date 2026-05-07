@@ -8,8 +8,9 @@
 // post-order and invokes each primitive on its target device, producing
 // concrete Buffers and clearing the lazy fields.
 //
-// Only float32 1-D vectors for this minimal demo. Adding shape/dtype later
-// is mechanical and does not change the architecture.
+// 1-D vectors only. dtype() exists but Float32 is the only value supported
+// today; widening to a second dtype is a new enum value plus per-backend
+// kernels for it.
 #pragma once
 
 #include <cstddef>
@@ -18,6 +19,7 @@
 
 #include "minml/buffer.h"
 #include "minml/device.h"
+#include "minml/dtype.h"
 
 namespace minml {
 
@@ -35,6 +37,7 @@ class Array {
   // Accessors.
   size_t size() const { return size_; }
   Device device() const { return device_; }
+  DType dtype() const { return dtype_; }
   bool evaluated() const { return data_ != nullptr; }
   const std::shared_ptr<Buffer>& buffer() const { return data_; }
   const std::shared_ptr<Primitive>& primitive() const { return primitive_; }
@@ -53,6 +56,7 @@ class Array {
  private:
   size_t size_ = 0;
   Device device_ = Device::CPU;
+  DType dtype_ = DType::Float32;            // only Float32 today.
   std::shared_ptr<Buffer> data_;            // null until evaluated.
   std::shared_ptr<Primitive> primitive_;    // null once evaluated.
   std::vector<Array> inputs_;               // empty once evaluated.

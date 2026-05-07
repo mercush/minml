@@ -47,6 +47,13 @@ void cpu_add(const Array& a, const Array& b, Array& out) {
   for (size_t i = 0; i < out.size(); ++i) po[i] = pa[i] + pb[i];
 }
 
+void cpu_mul(const Array& a, const Array& b, Array& out) {
+  const float* pa = data(a);
+  const float* pb = data(b);
+  float* po = data(out);
+  for (size_t i = 0; i < out.size(); ++i) po[i] = pa[i] * pb[i];
+}
+
 void cpu_dot(const Array& a, const Array& b, Array& out) {
   const float* pa = data(a);
   const float* pb = data(b);

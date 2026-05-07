@@ -99,6 +99,7 @@ WGPUComputePipeline pipeline(const std::string& name) {
   if (it != ctx().pipelines.end()) return it->second;
   WGPUComputePipeline p = nullptr;
   if (name == "add") p = make_pipeline(kAddWgsl, "main");
+  else if (name == "mul") p = make_pipeline(kMulWgsl, "main");
   else if (name == "dot") p = make_pipeline(kDotWgsl, "main");
   else throw std::runtime_error("unknown pipeline: " + name);
   ctx().pipelines[name] = p;
@@ -238,6 +239,13 @@ void webgpu_add(const Array& a, const Array& b, Array& out) {
   uint32_t n = static_cast<uint32_t>(out.size());
   uint32_t wg = (n + 63) / 64;
   dispatch("add", handle(a), handle(b), handle(out), wg);
+}
+
+void webgpu_mul(const Array& a, const Array& b, Array& out) {
+  require_init();
+  uint32_t n = static_cast<uint32_t>(out.size());
+  uint32_t wg = (n + 63) / 64;
+  dispatch("mul", handle(a), handle(b), handle(out), wg);
 }
 
 void webgpu_dot(const Array& a, const Array& b, Array& out) {

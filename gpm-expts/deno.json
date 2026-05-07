@@ -1,0 +1,9 @@
+{
+  "imports": {
+    "minml": "../build/minml_js.js"
+  },
+  "lock": false,
+  "compilerOptions": {
+    "lib": ["deno.window", "deno.unstable"]
+  }
+}
