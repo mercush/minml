@@ -116,10 +116,24 @@ maturin develop --release
 python ../../examples/example.py
 ```
 
-The example is an async coroutine — readbacks like `await m.add(x,
-y).tolist()` work on every backend. Today the example uses
-`Device.CPU`; switch to `Device.CUDA` on a CUDA box, or first call
-`await m.init_webgpu()` and use `Device.WebGPU`.
+On a CUDA host (Linux/Windows with `nvcc` on `PATH`), build with the
+CUDA backend linked in:
+
+```bash
+maturin develop --release --features cuda
+```
+
+The `cuda` feature forwards through to `minml-core`, which compiles
+`crates/minml-core/cuda/kernels.cu` via `cc::Build::cuda(true)` and
+links `cudart`. Then the Python example just flips one line:
+
+```python
+device = m.Device.CUDA   # was m.Device.CPU
+```
+
+Same async API on every backend — readbacks like `await m.add(x,
+y).tolist()` work uniformly. WebGPU is also available via `await
+m.init_webgpu()` + `Device.WebGPU`.
 
 ### TypeScript / browser (WebGPU + WASM)
 

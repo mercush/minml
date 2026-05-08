@@ -164,7 +164,7 @@ impl Array {
 
     // Iterative post-order DFS. No recursion, no boxed futures: even on
     // WebGPU the dispatch is sync (queue.submit returns immediately); only
-    // tolist/item/eval_async actually await on d2h.
+    // tolist/item actually await on d2h.
     pub fn eval(&self) -> Result<()> {
         if self.evaluated() {
             return Ok(());
@@ -218,31 +218,6 @@ impl Array {
         // Run the kernel. The primitive reads `output.buffer()`.
         prim.eval(&inputs, self)?;
         Ok(())
-    }
-
-    // ---- Sync readback (CPU only). Async wrappers in ops.rs/lib.rs. ----
-
-    pub fn tolist_sync(&self) -> Result<Vec<f32>> {
-        self.eval()?;
-        let mut out = vec![0.0f32; self.size];
-        let buf = self.buffer().expect("evaluated");
-        crate::device_dispatch::d2h_sync(self.device, &*buf, bytemuck::cast_slice_mut(&mut out))?;
-        Ok(out)
-    }
-
-    pub fn tolist_int_sync(&self) -> Result<Vec<i32>> {
-        self.eval()?;
-        let mut out = vec![0i32; self.size];
-        let buf = self.buffer().expect("evaluated");
-        crate::device_dispatch::d2h_sync(self.device, &*buf, bytemuck::cast_slice_mut(&mut out))?;
-        Ok(out)
-    }
-
-    pub fn item_sync(&self) -> Result<f32> {
-        if self.size != 1 {
-            return Err(MinmlError::ItemRequiresSize1);
-        }
-        Ok(self.tolist_sync()?[0])
     }
 
     // Async readback. CPU/CUDA finish the work synchronously and resolve

@@ -3,7 +3,7 @@
 // Pure Rust port of minml. Lazy `Array` graph, `Primitive`-per-op,
 // per-backend free functions (CPU, WebGPU, CUDA). The user-facing
 // surface is mostly sync (graph builders); only `Array::tolist`,
-// `Array::item`, `Array::eval_async`, and `init_webgpu` are async,
+// `Array::item` and `init_webgpu` are async,
 // since those are the only places that can block on a GPU.
 mod array;
 mod buffer;

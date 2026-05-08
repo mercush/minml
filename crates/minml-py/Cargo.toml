@@ -14,3 +14,10 @@ minml-core = { path = "../minml-core" }
 pyo3 = { version = "0.26", features = ["extension-module", "abi3-py39"] }
 pyo3-async-runtimes = { version = "0.26", features = ["tokio-runtime"] }
 tokio = { version = "1", features = ["rt-multi-thread"] }
+
+[features]
+default = []
+# Build with CUDA support: requires nvcc on PATH and the CUDA toolkit.
+# `maturin develop --release --features cuda`. macOS hosts won't have nvcc.
+cuda = ["minml-core/cuda"]
+webgpu = ["minml-core/webgpu"]
