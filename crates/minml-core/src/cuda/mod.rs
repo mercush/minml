@@ -17,7 +17,7 @@ struct MinmlCudaBuf {
     _priv: [u8; 0],
 }
 
-extern "C" {
+unsafe extern "C" {
     fn minml_cuda_alloc(bytes: usize) -> *mut MinmlCudaBuf;
     fn minml_cuda_free(buf: *mut MinmlCudaBuf);
     fn minml_cuda_h2d(dst: *mut MinmlCudaBuf, src: *const c_void, bytes: usize) -> i32;
