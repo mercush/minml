@@ -21,6 +21,9 @@ pub struct WebGpuBackend {
     device: wgpu::Device,
     queue: wgpu::Queue,
     pipelines: Mutex<HashMap<&'static str, wgpu::ComputePipeline>>,
+    // Pipelines built at runtime by transforms::jit. Keyed by the WGSL
+    // source itself so the same fused expression reuses the same pipeline.
+    jit_pipelines: Mutex<HashMap<String, wgpu::ComputePipeline>>,
 }
 
 static GLOBAL: OnceLock<Arc<WebGpuBackend>> = OnceLock::new();
@@ -67,6 +70,7 @@ pub fn install(device: wgpu::Device, queue: wgpu::Queue) {
         device,
         queue,
         pipelines: Mutex::new(HashMap::new()),
+        jit_pipelines: Mutex::new(HashMap::new()),
     }));
 }
 
@@ -377,4 +381,81 @@ pub fn dot(a: &Array, b: &Array, out: &Array) -> Result<()> {
         &as_wgpu_buf(&*buf_o).handle,
         wg,
     )
+}
+
+// ---- JIT runtime dispatch (used by transforms::jit) ----
+
+// Compile-or-reuse a pipeline from arbitrary WGSL, then dispatch it with one
+// storage binding per input plus the output. The kernel's `@workgroup_size`
+// must be 64 — the JIT generator emits exactly that.
+pub(crate) fn dispatch_jit_elementwise(
+    wgsl: &str,
+    inputs: &[Array],
+    out: &Array,
+) -> Result<()> {
+    let c = ctx()?;
+    let pipe = {
+        let mut guard = c.jit_pipelines.lock();
+        if let Some(p) = guard.get(wgsl) {
+            p.clone()
+        } else {
+            let module = c.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("minml-jit"),
+                source: wgpu::ShaderSource::Wgsl(wgsl.into()),
+            });
+            let pipe = c
+                .device
+                .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                    label: Some("minml-jit"),
+                    layout: None,
+                    module: &module,
+                    entry_point: Some("main"),
+                    compilation_options: Default::default(),
+                    cache: None,
+                });
+            guard.insert(wgsl.to_string(), pipe.clone());
+            pipe
+        }
+    };
+
+    let in_bufs: Vec<_> = inputs
+        .iter()
+        .map(|a| a.buffer().expect("evaluated"))
+        .collect();
+    let out_buf = out.buffer().expect("evaluated");
+
+    let layout = pipe.get_bind_group_layout(0);
+    let mut entries: Vec<wgpu::BindGroupEntry> = Vec::with_capacity(inputs.len() + 1);
+    for (i, b) in in_bufs.iter().enumerate() {
+        entries.push(wgpu::BindGroupEntry {
+            binding: i as u32,
+            resource: as_wgpu_buf(&**b).handle.as_entire_binding(),
+        });
+    }
+    entries.push(wgpu::BindGroupEntry {
+        binding: inputs.len() as u32,
+        resource: as_wgpu_buf(&*out_buf).handle.as_entire_binding(),
+    });
+    let bg = c.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("minml-jit-bg"),
+        layout: &layout,
+        entries: &entries,
+    });
+
+    let n = out.size() as u32;
+    let wg = n.div_ceil(64);
+    let mut enc = c
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+    {
+        let mut pass = enc.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: None,
+            timestamp_writes: None,
+        });
+        pass.set_pipeline(&pipe);
+        pass.set_bind_group(0, &bg, &[]);
+        pass.dispatch_workgroups(wg, 1, 1);
+    }
+    c.queue.submit(Some(enc.finish()));
+    Ok(())
 }

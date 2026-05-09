@@ -9,8 +9,10 @@ import init, {
   Device,
   array,
   add,
+  mul,
   dot,
   initWebGPU,
+  jitApply,
   setDefaultDevice,
 } from "../crates/minml-wasm/pkg/minml_wasm.js";
 
@@ -38,6 +40,32 @@ try {
     "dot(x+y, x+y) -> " +
       (await dot(add(x, y), add(x, y)).item()),
   );
+
+  // ---- jit: kernel fusion ----
+  // Without jit, `mul(add(a, b), add(a, a))` runs as three WGSL dispatches
+  // with two intermediate storage buffers. jitApply rewrites the lazy DAG
+  // so the whole expression becomes one runtime-generated WGSL kernel and
+  // one dispatch — no intermediates touch global memory.
+  const fused = jitApply(
+    (a: typeof x, b: typeof y) => mul(add(a, b), add(a, a)),
+    [x, y],
+  ) as typeof x;
+  log("jit (x+y)*(x+x) -> " + (await fused.tolist()).join(", "));
+
+  // jit also accepts multiple outputs. The Python binding walks
+  // `__dict__` so users can return a class instance whose fields are
+  // Arrays (the `Pair` shape in example.py); the wasm binding has no
+  // such reflection, so the equivalent is a JS array of Arrays. Each
+  // leaf becomes its own fused kernel — one dispatch per output.
+  const [pairSum, pairDiff] = jitApply(
+    (a: typeof x, b: typeof y) => [
+      add(mul(a, b), mul(a, a)), // a*b + a*a
+      add(mul(a, a), mul(a, a)), // 2 * a*a
+    ],
+    [x, y],
+  ) as [typeof x, typeof x];
+  log("jit pair.sum  -> " + (await pairSum.tolist()).join(", "));
+  log("jit pair.diff -> " + (await pairDiff.tolist()).join(", "));
 } catch (err) {
   log("error: " + err);
   console.error(err);

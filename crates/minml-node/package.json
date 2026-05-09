@@ -1,0 +1,29 @@
+{
+  "name": "minml-node",
+  "version": "0.1.0",
+  "description": "Node.js bindings for minml-core. Native addon — links libcuda + libnvrtc directly when built with --features cuda.",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "*.node"
+  ],
+  "napi": {
+    "name": "minml-node",
+    "triples": {
+      "defaults": true
+    }
+  },
+  "scripts": {
+    "build": "napi build --platform --release",
+    "build:cuda": "napi build --platform --release --cargo-flags=\"--features cuda\"",
+    "build:debug": "napi build --platform"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.0"
+  },
+  "engines": {
+    "node": ">= 18"
+  }
+}

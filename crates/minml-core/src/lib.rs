@@ -34,4 +34,4 @@ pub use ops::{
 };
 pub use primitive::Primitive;
 pub use prng::PRNGKey;
-pub use transforms::{slice_axis0, stack, vmap_apply, VmapCallable};
+pub use transforms::{jit, slice_axis0, stack, vmap_apply, JitCallable, VmapCallable};

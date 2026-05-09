@@ -146,6 +146,23 @@ impl Array {
         }
     }
 
+    // Snapshot of (primitive, inputs) when this Array is still lazy, or
+    // None if it has already been evaluated. Used by transforms::jit to
+    // walk the producer DAG and fold elementwise chains into a single
+    // FusedElementwise primitive.
+    pub(crate) fn lazy_state(&self) -> Option<(Arc<dyn Primitive>, Vec<Array>)> {
+        match &*self.inner.lock() {
+            ArrayInner::Evaluated(_) => None,
+            ArrayInner::Lazy { prim, inputs } => Some((prim.clone(), inputs.clone())),
+        }
+    }
+
+    // Stable identity of the inner state, used by transforms::jit to
+    // de-duplicate references to the same logical Array (e.g. `x * x`).
+    pub(crate) fn inner_id(&self) -> usize {
+        Arc::as_ptr(&self.inner) as usize
+    }
+
     // ---- Vmap-axis tagging ----
 
     pub fn with_batch_axis(&self, axis: i32) -> Self {

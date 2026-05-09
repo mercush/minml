@@ -352,6 +352,109 @@ pub fn categorical_sample(
     })
 }
 
+// ---- jit shim ----
+//
+// jitApply(f, args) traces f(...args) once and folds contiguous Float32
+// add/mul chains in each output's DAG into one FusedElementwise primitive.
+// On WebGPU that means one runtime-generated WGSL kernel + one dispatch
+// per result, instead of one dispatch per op with intermediate buffers.
+// Return shape mirrors vmapApply: the user callable may return a single
+// Array or a JS array of Array.
+#[wasm_bindgen(js_name = jitApply)]
+pub fn jit_apply_js(f: js_sys::Function, args: js_sys::Array) -> Result<JsValue, JsValue> {
+    let n = args.length() as usize;
+    let mut c_args: Vec<ml::Array> = Vec::with_capacity(n);
+    for i in 0..n {
+        let a = args.get(i as u32);
+        let arr = try_take_array(&a).ok_or_else(|| {
+            JsValue::from_str("jit: each arg must be a minml Array")
+        })?;
+        c_args.push(arr.inner);
+    }
+
+    let mut callable_err: Option<JsValue> = None;
+    let mut return_shape_n: Option<usize> = None;
+
+    let mut callable = |sliced: &[ml::Array]| -> ml::MinmlResult<Vec<ml::Array>> {
+        let call_args = js_sys::Array::new();
+        for arr in sliced {
+            let v: JsValue = JsValue::from(Array { inner: arr.clone() });
+            call_args.push(&v);
+        }
+        let r = match f.apply(&JsValue::NULL, &call_args) {
+            Ok(v) => v,
+            Err(e) => {
+                callable_err = Some(e);
+                return Err(ml::MinmlError::Other("jit: js callable threw".into()));
+            }
+        };
+        if let Some(arr) = try_take_array(&r) {
+            return_shape_n = None;
+            return Ok(vec![arr.inner]);
+        }
+        if !r.is_object() {
+            callable_err = Some(JsValue::from_str(
+                "jit: callable must return an Array or array-of-Array",
+            ));
+            return Err(ml::MinmlError::Other("jit: bad return type".into()));
+        }
+        let len = js_sys::Reflect::get(&r, &JsValue::from_str("length"))
+            .ok()
+            .and_then(|v| v.as_f64())
+            .map(|v| v as usize);
+        match len {
+            Some(l) => {
+                let mut out = Vec::with_capacity(l);
+                for i in 0..l {
+                    let leaf = js_sys::Reflect::get_u32(&r, i as u32).map_err(|e| {
+                        callable_err = Some(e);
+                        ml::MinmlError::Other("jit: leaf access failed".into())
+                    })?;
+                    match try_take_array(&leaf) {
+                        Some(a) => out.push(a.inner),
+                        None => {
+                            callable_err =
+                                Some(JsValue::from_str("jit: leaf is not an Array"));
+                            return Err(ml::MinmlError::Other("jit: bad leaf".into()));
+                        }
+                    }
+                }
+                return_shape_n = Some(l);
+                Ok(out)
+            }
+            None => {
+                callable_err = Some(JsValue::from_str(
+                    "jit: callable must return Array or list of Array",
+                ));
+                Err(ml::MinmlError::Other("jit: bad return type".into()))
+            }
+        }
+    };
+
+    let fused = match ml::jit(&c_args, &mut callable) {
+        Ok(v) => v,
+        Err(e) => {
+            if let Some(je) = callable_err {
+                return Err(je);
+            }
+            return Err(jserr(e));
+        }
+    };
+
+    match return_shape_n {
+        None => Ok(JsValue::from(Array {
+            inner: fused.into_iter().next().unwrap(),
+        })),
+        Some(_) => {
+            let out = js_sys::Array::new();
+            for arr in fused {
+                out.push(&JsValue::from(Array { inner: arr }));
+            }
+            Ok(out.into())
+        }
+    }
+}
+
 // ---- WebGPU init ----
 
 #[wasm_bindgen(js_name = initWebGPU)]

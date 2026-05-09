@@ -520,6 +520,79 @@ fn vmap_apply_py<'py>(
     rebuild_tree(py, template.bind(py), &leaf_keys, stacked)
 }
 
+// ---- jit shim ----
+//
+// jit_apply(f, args) traces f(args) once, then folds elementwise add/mul
+// chains in each output's lazy DAG into a single FusedElementwise primitive.
+// The result has the same Python shape as the original return value (single
+// Array or pytree), but each leaf is a lazy Array whose eval() runs one
+// fused kernel per device-side launch instead of one per op.
+#[pyfunction]
+#[pyo3(name = "jit_apply")]
+fn jit_apply_py<'py>(
+    py: Python<'py>,
+    f: Bound<'py, PyAny>,
+    args: Bound<'py, PyList>,
+) -> PyResult<Py<PyAny>> {
+    let n = args.len();
+    let mut c_args: Vec<ml::Array> = Vec::with_capacity(n);
+    for i in 0..n {
+        let a = args.get_item(i)?;
+        let arr: PyArray = a.extract()?;
+        c_args.push(arr.inner);
+    }
+
+    let mut first_result: Option<Py<PyAny>> = None;
+    let mut leaf_keys: Vec<String> = Vec::new();
+
+    let mut callable = |sliced: &[ml::Array]| -> ml::MinmlResult<Vec<ml::Array>> {
+        let result: PyResult<Vec<ml::Array>> = (|| {
+            let call_args = PyList::empty(py);
+            for arr in sliced {
+                let py_arr = PyArray { inner: arr.clone() }
+                    .into_pyobject(py)?
+                    .into_any();
+                call_args.append(py_arr)?;
+            }
+            let tup = PyTuple::new(py, call_args.iter())?;
+            let r = f.call1(tup)?;
+            first_result = Some(r.clone().unbind());
+            let mut local_keys = Vec::new();
+            let leaves = collect_leaves(&r, Some(&mut local_keys))?;
+            leaf_keys = local_keys;
+            Ok(leaves)
+        })();
+        result.map_err(|e| ml::MinmlError::Other(format!("jit: python callable: {e}")))
+    };
+
+    let fused = ml::jit(&c_args, &mut callable).map_err(map_err)?;
+    let template = first_result
+        .ok_or_else(|| PyRuntimeError::new_err("jit: callable did not return"))?;
+    rebuild_tree(py, template.bind(py), &leaf_keys, fused)
+}
+
+// jit(f) -> closure that calls jit_apply with the wrapped f. Used as a
+// decorator: `f = jit(f); out = f(x, y)`.
+#[pyfunction]
+fn jit<'py>(py: Python<'py>, f: Bound<'py, PyAny>) -> PyResult<Py<PyAny>> {
+    let f = f.unbind();
+    let closure = pyo3::types::PyCFunction::new_closure(
+        py,
+        None,
+        None,
+        move |args: &Bound<'_, PyTuple>, _kw: Option<&Bound<'_, PyDict>>| -> PyResult<Py<PyAny>> {
+            Python::attach(|py| {
+                let arg_list = PyList::empty(py);
+                for a in args.iter() {
+                    arg_list.append(a)?;
+                }
+                jit_apply_py(py, f.bind(py).clone(), arg_list)
+            })
+        },
+    )?;
+    Ok(closure.into_pyobject(py)?.into_any().unbind())
+}
+
 #[pyfunction]
 fn vmap<'py>(
     py: Python<'py>,
@@ -581,6 +654,8 @@ fn _minml(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(categorical_sample, m)?)?;
     m.add_function(wrap_pyfunction!(vmap_apply_py, m)?)?;
     m.add_function(wrap_pyfunction!(vmap, m)?)?;
+    m.add_function(wrap_pyfunction!(jit_apply_py, m)?)?;
+    m.add_function(wrap_pyfunction!(jit, m)?)?;
     m.add_function(wrap_pyfunction!(init_webgpu, m)?)?;
     Ok(())
 }

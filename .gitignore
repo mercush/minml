@@ -4,3 +4,4 @@ target/
 pkg/
 examples/example.js
 .cargo
+sync.sh

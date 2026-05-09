@@ -16,13 +16,15 @@ parking_lot = "0.12"
 wgpu = { version = "26", optional = true, default-features = false, features = ["wgsl", "metal", "vulkan", "dx12", "webgpu", "fragile-send-sync-non-atomic-wasm"] }
 pollster = { version = "0.4", optional = true }
 
+# CUDA backend (optional; uses NVlabs/cuda-oxide cuda-core for the driver
+# runtime + RAII wrappers, plus NVRTC at runtime for kernel/JIT compilation).
+cuda-core = { git = "https://github.com/NVlabs/cuda-oxide.git", optional = true }
+cuda-bindings = { git = "https://github.com/NVlabs/cuda-oxide.git", optional = true }
+
 [features]
 default = ["webgpu"]
 webgpu = ["dep:wgpu", "dep:pollster"]
-cuda = []
-
-[build-dependencies]
-cc = { version = "1", features = ["parallel"] }
+cuda = ["dep:cuda-core", "dep:cuda-bindings"]
 
 [dev-dependencies]
 pollster = "0.4"

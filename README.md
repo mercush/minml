@@ -81,15 +81,20 @@ crates/
   minml-py/                         # pyo3 + maturin
     Cargo.toml pyproject.toml
     src/lib.rs                      # async Python surface
-  minml-wasm/                       # wasm-bindgen
+  minml-wasm/                       # wasm-bindgen (browser TS frontend)
     Cargo.toml
     index.ts                        # ESM re-export, no top-level await
     src/lib.rs                      # async TS surface
+  minml-node/                       # napi-rs (Node TS frontend)
+    Cargo.toml package.json
+    src/lib.rs                      # native .node addon (links libcuda
+                                    # + libnvrtc when --features cuda)
 examples/
   example.py                        # async, asyncio.run
-  example.ts                        # await init(), await initWebGPU()
+  example.ts                        # browser WASM + WebGPU
   example.html                      # loads the wasm demo
   example.js                        # tsc output
+  example_node.ts                   # Node + native (CPU/CUDA/WebGPU)
 ```
 
 ## Building
@@ -137,22 +142,82 @@ m.init_webgpu()` + `Device.WebGPU`.
 
 ### TypeScript / browser (WebGPU + WASM)
 
+Requires a Rustup-managed toolchain with the wasm target installed
+(`rustup target add wasm32-unknown-unknown`). Non-Rustup installs —
+notably Homebrew's `rust` formula — ship without the wasm sysroot, and
+`wasm-pack` will fail with `wasm32-unknown-unknown target not found in
+sysroot`.
+
 ```bash
 cd crates/minml-wasm
 wasm-pack build --target web --release
-# Compile examples/example.ts -> examples/example.js
 (cd ../../examples && tsc)
-# Serve from the workspace root.
 cd ../..
-python -m http.server 8000
+python -m http.server 8888
 ```
 
-Open <http://localhost:8000/examples/example.html> in a Chromium-family
+Open <http://localhost:8888/examples/example.html> in a Chromium-family
 browser. `await init()` instantiates the wasm module; `await
 initWebGPU()` acquires a device through wgpu (which calls
 `navigator.gpu` under the hood — no Asyncify, no spin loop). Readbacks
 suspend on `Buffer::slice.map_async` and surface as Promises on the JS
 side.
+
+### TypeScript / Node (CPU / CUDA / native WebGPU)
+
+The browser path above can't reach the CUDA backend: WASM in any
+browser/Node WASM runtime is sandboxed and has no FFI to host C
+libraries (libcuda, libnvrtc). To run TypeScript against the CUDA
+backend you build the `minml-node` crate instead — a regular native
+addon (`.node`) via [napi-rs](https://napi.rs), the same family as the
+pyo3-built Python extension. Building with `--features cuda` links
+libcuda + libnvrtc just like Python does.
+
+```bash
+cd crates/minml-node
+pnpm install            # or npm install / yarn
+
+# CPU only (and native WebGPU via wgpu's Vulkan/Metal/DX12 backends):
+pnpm build
+
+# CUDA backend — requires libcuda + libnvrtc on the host (Linux/Windows
+# with the CUDA toolkit installed and on LD_LIBRARY_PATH / PATH).
+pnpm build:cuda
+
+cd ../..
+node --experimental-strip-types examples/example_node.ts
+```
+
+`pnpm build:cuda` runs `napi build --release --cargo-flags="--features
+cuda"`, producing `crates/minml-node/minml-node.<triple>.node` plus a
+generated `index.js` / `index.d.ts`. The example imports from that
+generated entry point and uses `Device.CUDA` directly:
+
+```ts
+import { Device, array, add, dot, setDefaultDevice }
+  from "../crates/minml-node/index.js";
+
+setDefaultDevice(Device.CUDA);
+const x = array([1, 2, 3, 4], Device.CUDA);
+const y = array([10, 20, 30, 40], Device.CUDA);
+console.log(await dot(x, y).item());        // -> 300
+```
+
+The async surface is identical to the wasm/python bindings: `tolist`,
+`item`, `eval`, and `initWebGPU` are Promises driven by napi-rs's Tokio
+runtime. CPU and CUDA resolve immediately inside the Rust future;
+native WebGPU (if you opt into it via `await initWebGPU()`) suspends on
+the real `map_async`. Note the Node binding intentionally omits `jit`
+for now — graph builders compose fine on the CUDA backend without it,
+and the trace-and-callback shape is awkward to bind through stable
+napi v2. If you need fusion from TS, the wasm + WebGPU path (or the
+Python binding) already exposes it.
+
+| Frontend     | Backends reachable           | Notes                          |
+| ------------ | ---------------------------- | ------------------------------ |
+| `minml-py`   | CPU, CUDA, WebGPU            | pyo3 extension; `jit` exposed  |
+| `minml-wasm` | CPU (in-browser), WebGPU     | sandboxed; no host-FFI         |
+| `minml-node` | CPU, CUDA, native WebGPU     | napi-rs addon; CUDA via toolkit|
 
 ## What's deliberately missing
 
