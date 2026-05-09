@@ -6,6 +6,7 @@
 use crate::buffer::Buffer;
 use crate::cpu::backend as cpu_backend;
 use crate::device::Device;
+#[allow(unused_imports)]
 use crate::error::{MinmlError, Result};
 use std::sync::Arc;
 

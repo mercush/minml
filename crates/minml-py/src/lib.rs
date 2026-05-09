@@ -393,7 +393,7 @@ fn rebuild_tree<'py>(
     template: &Bound<'py, PyAny>,
     keys: &[String],
     stacked: Vec<ml::Array>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     if keys.len() == 1 && keys[0].is_empty() {
         return Ok(PyArray {
             inner: stacked.into_iter().next().unwrap(),
@@ -419,7 +419,7 @@ fn vmap_apply_py<'py>(
     f: Bound<'py, PyAny>,
     in_axes: Bound<'py, PyList>,
     args: Bound<'py, PyList>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let n = in_axes.len();
     if args.len() != n {
         return Err(PyRuntimeError::new_err("vmap: in_axes length != args length"));
@@ -440,7 +440,7 @@ fn vmap_apply_py<'py>(
     let mut c_args: Vec<ml::Array> = Vec::new();
     let mut c_in_axes: Vec<i32> = Vec::new();
     let mut c_index: Vec<i32> = vec![-1; n];
-    let mut py_args: Vec<PyObject> = Vec::with_capacity(n);
+    let mut py_args: Vec<Py<PyAny>> = Vec::with_capacity(n);
     let mut batch_n: usize = 0;
     let mut found = false;
 
@@ -480,7 +480,7 @@ fn vmap_apply_py<'py>(
 
     // Per-iter callable: build a Python tuple, call f, collect leaves.
     let mut leaf_keys: Vec<String> = Vec::new();
-    let mut first_result: Option<PyObject> = None;
+    let mut first_result: Option<Py<PyAny>> = None;
     let mut first = true;
 
     let mut callable = |b: usize, sliced: &[ml::Array]| -> ml::MinmlResult<Vec<ml::Array>> {
@@ -525,15 +525,15 @@ fn vmap<'py>(
     py: Python<'py>,
     f: Bound<'py, PyAny>,
     in_axes: Bound<'py, PyList>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let f = f.unbind();
     let in_axes = in_axes.unbind();
     let closure = pyo3::types::PyCFunction::new_closure(
         py,
         None,
         None,
-        move |args: &Bound<'_, PyTuple>, _kw: Option<&Bound<'_, PyDict>>| -> PyResult<PyObject> {
-            Python::with_gil(|py| {
+        move |args: &Bound<'_, PyTuple>, _kw: Option<&Bound<'_, PyDict>>| -> PyResult<Py<PyAny>> {
+            Python::attach(|py| {
                 let arg_list = PyList::empty(py);
                 for a in args.iter() {
                     arg_list.append(a)?;
