@@ -139,9 +139,6 @@ export async function copy_buffer_to_host_async(
 // ---- Pipeline cache ----
 
 function pipeline(name: string): GPUComputePipeline {
-  const c = ctx();
-  const cached = c.pipelines.get(name);
-  if (cached) return cached;
   let wgsl: string;
   switch (name) {
     case "add":
@@ -156,14 +153,34 @@ function pipeline(name: string): GPUComputePipeline {
     default:
       throw MinmlError.other(`unknown pipeline: ${name}`);
   }
-  const module = c.device.createShaderModule({ label: name, code: wgsl });
+  return compute_pipeline(wgsl, name);
+}
+
+// Source-keyed pipeline cache. Used both by the static add/mul/dot kernels
+// (via `pipeline(name)`) and by the jit's fused-kernel emitter (which
+// generates WGSL on the fly).
+export function compute_pipeline(
+  wgsl: string,
+  label: string,
+): GPUComputePipeline {
+  const c = ctx();
+  const cached = c.pipelines.get(wgsl);
+  if (cached) return cached;
+  const module = c.device.createShaderModule({ label, code: wgsl });
   const pipe = c.device.createComputePipeline({
-    label: name,
+    label,
     layout: "auto",
     compute: { module, entryPoint: "main" },
   });
-  c.pipelines.set(name, pipe);
+  c.pipelines.set(wgsl, pipe);
   return pipe;
+}
+
+// Internal helper for fused.ts so it can build dynamic bind groups
+// without re-implementing context plumbing.
+export function get_device_and_queue(): { device: GPUDevice; queue: GPUQueue } {
+  const c = ctx();
+  return { device: c.device, queue: c.queue };
 }
 
 function dispatch(

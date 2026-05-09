@@ -149,6 +149,13 @@ export class Array {
     return s.kind === "evaluated" ? s.buffer : null;
   }
 
+  // Read-only view of the lazy DAG state, for the jit/fuse pass.
+  // Returns null if the array has already been evaluated.
+  lazy_state(): { prim: Primitive; inputs: Array[] } | null {
+    const s = this._state_box.state;
+    return s.kind === "lazy" ? { prim: s.prim, inputs: s.inputs } : null;
+  }
+
   // ---- Vmap-axis tagging ----
 
   with_batch_axis(axis: number): Array {

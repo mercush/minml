@@ -20,5 +20,5 @@
     "verbatimModuleSyntax": false
   },
   "include": ["src/**/*", "tests/**/*"],
-  "exclude": ["node_modules", "dist", "examples"]
+  "exclude": ["node_modules", "dist", "examples", "**/build"]
 }

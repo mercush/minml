@@ -25,6 +25,7 @@ export {
 export type { Primitive } from "./primitive.js";
 export { PRNGKey } from "./prng.js";
 export {
+  jit,
   slice_axis0,
   stack,
   vmap_apply,

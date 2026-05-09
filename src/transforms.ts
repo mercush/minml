@@ -9,6 +9,7 @@ import * as cpu_backend from "./cpu/backend.js";
 import { Device } from "./device.js";
 import { DType, dtype_bytes } from "./dtype.js";
 import { MinmlError } from "./error.js";
+import { fuse } from "./fused/fuse.js";
 
 function product(shape: number[]): number {
   let p = 1;
@@ -98,6 +99,44 @@ export function stack(parts: Array[]): Array {
         dev,
       );
   }
+}
+
+// jit(f): trace + fuse the lazy DAG f produces. The returned function
+// has the same signature as f. On every call:
+//   1. Run f(...args) to build the lazy graph.
+//   2. Walk the return value pytree-style and rewrite each Array leaf
+//      with FusedElemPrim / FusedReducePrim wherever a maximal
+//      {add, mul, dot} sub-DAG can be absorbed (CUDA + WebGPU only;
+//      CPU is a fusion barrier).
+//   3. Return a value of the same shape as f's return — Array, plain
+//      JS array, or any class instance whose enumerable fields are
+//      Arrays (or further containers).
+//
+// Kernel compilation is cached at the backend level (WebGPU pipeline
+// cache, CUDA NVRTC source-string cache), so steady state is one
+// compile per unique kernel shape.
+function walk_pytree(node: unknown): unknown {
+  if (node instanceof Array) return fuse(node);
+  if (globalThis.Array.isArray(node)) return node.map(walk_pytree);
+  if (node !== null && typeof node === "object") {
+    // Reconstruct preserving prototype (so `pair instanceof Pair` still
+    // holds on the way out). Walk own enumerable string keys only —
+    // matches the Python __dict__ traversal in the Rust/wasm port.
+    const out: Record<string, unknown> = Object.create(
+      Object.getPrototypeOf(node),
+    );
+    for (const k of Object.keys(node as object)) {
+      out[k] = walk_pytree((node as Record<string, unknown>)[k]);
+    }
+    return out;
+  }
+  return node;
+}
+
+export function jit<A extends unknown[], R>(
+  f: (...args: A) => R,
+): (...args: A) => R {
+  return (...args: A): R => walk_pytree(f(...args)) as R;
 }
 
 // Per-iteration callable. Receives:

@@ -19,14 +19,17 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # import lib (Windows), CMAKE_JS_SRC = optional delay-load file (Windows).
 include_directories(${CMAKE_JS_INC})
 
-# Resolve node-addon-api include via Node, since the package is
-# pure-headers and ships its include path through `require`.
-execute_process(
-    COMMAND node -p "require('node-addon-api').include_dir"
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/../..
-    OUTPUT_VARIABLE NODE_ADDON_API_DIR
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
+# Resolve node-addon-api include. The package is header-only and lives
+# at <repo>/node_modules/node-addon-api in a standard (non-workspace)
+# install. Verify napi.h is present so we fail at configure rather than
+# during the compile.
+set(NODE_ADDON_API_DIR "${CMAKE_SOURCE_DIR}/../../node_modules/node-addon-api")
+if(NOT EXISTS "${NODE_ADDON_API_DIR}/napi.h")
+    message(FATAL_ERROR
+        "node-addon-api headers not found at ${NODE_ADDON_API_DIR}.\n"
+        "Run `npm install` from the repo root, or set NODE_ADDON_API_DIR explicitly.")
+endif()
+message(STATUS "node-addon-api: ${NODE_ADDON_API_DIR}")
 
 add_library(minml_cuda SHARED
     addon.cc
@@ -42,10 +45,11 @@ target_include_directories(minml_cuda PRIVATE
 set_target_properties(minml_cuda PROPERTIES
     PREFIX ""
     SUFFIX ".node"
-    CUDA_SEPARABLE_COMPILATION ON
 )
 
 target_link_libraries(minml_cuda
     ${CMAKE_JS_LIB}
     cudart
+    cuda            # driver API for cuModuleLoadData / cuLaunchKernel
+    nvrtc           # runtime CUDA compiler
 )

@@ -7,6 +7,6 @@
     "declarationMap": false,
     "noEmit": false
   },
-  "include": ["example.ts"],
+  "include": ["example.ts", "example.node.ts"],
   "exclude": []
 }

@@ -3,7 +3,7 @@
 // Imports the compiled TS library from ../dist (run `npm run build` in the
 // repo root first). Readbacks (tolist, item) are Promises driven by
 // GPUBuffer.mapAsync.
-import { add, Array, Device, dot, init_webgpu, set_default_device, } from "../dist/src/index.js";
+import { add, Array, Device, dot, init_webgpu, jit, mul, set_default_device, } from "../dist/src/index.js";
 const out = document.getElementById("out");
 out.textContent = "";
 const log = (s) => {
@@ -20,6 +20,29 @@ try {
     log("add -> " + (await add(x, y).tolist()).join(", "));
     log("dot -> " + (await dot(x, y).item()));
     log("dot(x+y, x+y) -> " + (await dot(add(x, y), add(x, y)).item()));
+    // ---- jit: kernel fusion ----
+    // Without jit, `mul(add(a, b), add(a, a))` runs as three WGSL dispatches
+    // with two intermediate storage buffers. jit rewrites the lazy DAG so the
+    // whole expression becomes one runtime-generated WGSL kernel and one
+    // dispatch — no intermediates touch global memory.
+    const fused = jit((a, b) => mul(add(a, b), add(a, a)));
+    log("jit (x+y)*(x+x) -> " + (await fused(x, y).tolist()).join(", "));
+    // jit also accepts pytree-style returns — any class instance whose
+    // enumerable fields are Arrays. Same shape goes in, same shape comes
+    // out, with each leaf separately fused.
+    class Pair {
+        sum;
+        diff;
+        constructor(sum, diff) {
+            this.sum = sum;
+            this.diff = diff;
+        }
+    }
+    const both = jit((a, b) => new Pair(add(mul(a, b), mul(a, a)), // a*b + a*a
+    add(mul(a, a), mul(a, a))));
+    const pair = both(x, y);
+    log("jit pair.sum  -> " + (await pair.sum.tolist()).join(", "));
+    log("jit pair.diff -> " + (await pair.diff.tolist()).join(", "));
 }
 catch (err) {
     log("error: " + err);

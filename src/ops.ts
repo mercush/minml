@@ -34,6 +34,9 @@ class AddPrim implements Primitive {
   name(): string {
     return "add";
   }
+  fusion_class(): "elementwise" {
+    return "elementwise";
+  }
   eval(inputs: Array[], out: Array): void {
     switch (out.device()) {
       case Device.Cpu:
@@ -59,6 +62,9 @@ export function mul(a: Array, b: Array): Array {
 class MulPrim implements Primitive {
   name(): string {
     return "mul";
+  }
+  fusion_class(): "elementwise" {
+    return "elementwise";
   }
   eval(inputs: Array[], out: Array): void {
     switch (out.device()) {
@@ -86,6 +92,9 @@ export function dot(a: Array, b: Array): Array {
 class DotPrim implements Primitive {
   name(): string {
     return "dot";
+  }
+  fusion_class(): "reduction" {
+    return "reduction";
   }
   eval(inputs: Array[], out: Array): void {
     switch (out.device()) {

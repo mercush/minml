@@ -5,3 +5,4 @@ build
 *.tsbuildinfo
 examples/example.js
 .DS_Store
+sync.sh

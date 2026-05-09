@@ -110,8 +110,8 @@ const r = randint(key.k0, key.k1, 0, 10, [64], Device.Cpu);
 ```bash
 npm run build           # build dist/
 npm run build:example   # build examples/example.js
-npx http-server -p 8000 .
-open http://localhost:8000/examples/example.html
+npx http-server -p 8888 .
+open http://localhost:8888/examples/example.html
 ```
 
 Output (in a Chromium-family browser with WebGPU enabled):
