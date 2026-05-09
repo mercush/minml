@@ -1,11 +1,12 @@
 {
+  "extends": "../tsconfig.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ES2022",
-    "moduleResolution": "bundler",
-    "strict": true,
-    "lib": ["ES2022", "DOM"],
-    "skipLibCheck": true
+    "outDir": ".",
+    "rootDir": ".",
+    "declaration": false,
+    "declarationMap": false,
+    "noEmit": false
   },
-  "include": ["example.ts"]
+  "include": ["example.ts"],
+  "exclude": []
 }

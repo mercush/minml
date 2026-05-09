@@ -1,0 +1,36 @@
+{
+  "name": "minml",
+  "version": "0.1.0",
+  "description": "Minimal lazy tensor library: CPU + WebGPU, ported from Rust.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:example": "tsc -p examples/tsconfig.json",
+    "build:cuda": "cmake-js compile -d src/cuda",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "node-addon-api": "^8.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@webgpu/types": "^0.1.40",
+    "cmake-js": "^7.3.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  }
+}

@@ -1,19 +1,19 @@
 # minml
 
 A minimal multi-backend tensor library, structured the way MLX is, kept
-small enough to read in one sitting. Two ops: `add` and `dot`, on 1-D
-float32 vectors, with a CPU / CUDA / WebGPU backend and Python /
-TypeScript bindings.
+small enough to read in one sitting. Add / mul / dot on float32 vectors,
+gather and sampling on multi-dim tensors, with a CPU and WebGPU backend.
+Pure TypeScript — runs in Node and in the browser.
 
-The core is Rust. The Python and TypeScript APIs are async — readbacks
-return coroutines / Promises uniformly across backends. WebGPU readback
-goes through wgpu's native `map_async` (no Asyncify, no spin-wait).
+The user-facing surface is mostly sync (graph builders); only `tolist`,
+`item`, and `init_webgpu` are async — those are the only places that can
+block on a GPU.
 
 ## Architecture
 
 ```
                  ┌──────────────────────────────┐
-                 │       User-facing API         │
+                 │      User-facing API          │
                  │   Array, ops, Device, DType   │
                  └──────────────┬───────────────┘
                                 │
@@ -26,158 +26,156 @@ goes through wgpu's native `map_async` (no Asyncify, no spin-wait).
                   ┌─────────────▼──────────────┐
                   │   Primitive (AddPrim …)     │
                   │   dispatches on device      │
-                  └──┬──────────┬──────────┬───┘
-                     │          │          │
-              ┌──────▼──┐  ┌────▼───┐  ┌───▼──────┐
-              │   CPU   │  │  CUDA  │  │  WebGPU  │
-              │  loops  │  │  FFI   │  │   wgpu   │
-              │         │  │ shim   │  │   crate  │
-              └─────────┘  └────────┘  └──────────┘
+                  └──┬─────────────┬───────────┬┘
+                     │             │           │
+              ┌──────▼──┐    ┌─────▼────┐  ┌───▼──────┐
+              │   CPU   │    │  CUDA    │  │  WebGPU  │
+              │  loops  │    │ N-API    │  │ navigator│
+              │         │    │ addon    │  │   .gpu   │
+              └─────────┘    └──────────┘  └──────────┘
 ```
 
 The pieces:
 
-* **`Array`** holds *either* a `Buffer` (evaluated) *or* a `Primitive`
-  plus a list of input `Array`s (lazy). Calling `tolist()` / `item()` /
-  `eval()` walks the input DAG iteratively in post-order, allocates
-  output buffers, and runs each primitive.
-* **`Primitive`** (`AddPrim`, `DotPrim`, …) is the op-specific node. Its
+- **`Array`** holds *either* a `Buffer` (evaluated) *or* a `Primitive`
+  plus a list of input `Array`s (lazy). `tolist()` / `item()` walk the
+  input DAG iteratively in post-order, allocate output buffers, and run
+  each primitive.
+- **`Primitive`** (`AddPrim`, `DotPrim`, …) is the op-specific node. Its
   single job is to dispatch on the output device to the right backend.
-* **Backends** each provide allocate / h2d / d2h / kernels.
-  - **CPU** is pure Rust loops.
-  - **CUDA** is an extern "C" shim in `crates/minml-core/cuda/kernels.cu`
-    built by `build.rs` via `cc::Build::cuda(true)`. Rust calls it via
-    FFI through opaque handles.
-  - **WebGPU** uses the [`wgpu`](https://wgpu.rs) crate. Same code
-    targets native (Vulkan/Metal/DX12) and `wasm32-unknown-unknown`
-    (`navigator.gpu`).
-* **Async seam.** The internal `Backend` trait is sync — even WebGPU
-  kernel dispatch is sync (`queue.submit` returns immediately). Only
-  *readback* (`Buffer::slice.map_async`) and *device acquisition*
-  (`request_adapter`/`request_device`) are async. Those are the
-  user-facing async surfaces: `Array::tolist`, `Array::item`,
-  `Array::eval`, and `init_webgpu`.
+- **Backends** each provide allocate / h2d / d2h / kernels.
+  - **CPU** loops over `Float32Array` / `Int32Array` views over a shared
+    `ArrayBuffer`.
+  - **WebGPU** uses the browser's native `navigator.gpu` — no wgpu, no
+    wasm shim. WGSL kernels are inlined as strings.
+  - **CUDA** is an *optional* Node-only N-API addon (`src/cuda/`,
+    compiled via cmake-js). Build it with `npm run build:cuda` on a host
+    with the CUDA toolkit; CPU / WebGPU keep working without it. If the
+    `.node` binary isn't present, calls touching `Device.Cuda` throw
+    `MinmlError.backend_not_built("cuda")`.
+
+## Install / build
+
+```bash
+npm install
+npm run build         # tsc -> dist/
+npm test              # vitest: 16 tests, all CPU
+```
+
+### Optional CUDA addon (Linux/Windows + NVIDIA GPU)
+
+```bash
+npm run build:cuda    # cmake-js -> build/Release/minml_cuda.node
+```
+
+Requires `nvcc` on `PATH` and a working CUDA toolkit. Won't run on macOS
+(no CUDA support since 2019). Once built, `Device.Cuda` works for `add`,
+`mul`, `dot`; gather, sampling, and `ones` are CPU-only (matches the
+original).
+
+## Usage
+
+```ts
+import {
+  Array,
+  Device,
+  PRNGKey,
+  add,
+  dot,
+  randint,
+  init_webgpu,
+  set_default_device,
+} from "minml";
+
+// CPU
+const x = Array.from_f32_1d([1, 2, 3, 4], Device.Cpu);
+const y = Array.from_f32_1d([10, 20, 30, 40], Device.Cpu);
+console.log(await add(x, y).tolist());          // [11, 22, 33, 44]
+console.log(await dot(x, y).item());            // 300
+
+// WebGPU (browser only)
+await init_webgpu();
+set_default_device(Device.WebGpu);
+const a = Array.from_f32_1d([1, 2, 3, 4], Device.WebGpu);
+const b = Array.from_f32_1d([10, 20, 30, 40], Device.WebGpu);
+console.log(await dot(a, b).item());            // 300
+
+// Splittable PRNG (JAX-style)
+const key = PRNGKey.from_seed(42);
+const r = randint(key.k0, key.k1, 0, 10, [64], Device.Cpu);
+```
+
+## Browser demo
+
+```bash
+npm run build           # build dist/
+npm run build:example   # build examples/example.js
+npx http-server -p 8000 .
+open http://localhost:8000/examples/example.html
+```
+
+Output (in a Chromium-family browser with WebGPU enabled):
+
+```
+add -> 11, 22, 33, 44
+dot -> 300
+dot(x+y, x+y) -> 3630
+```
 
 ## Repository layout
 
 ```
-Cargo.toml                          # workspace
-crates/
-  minml-core/                       # core library (Rust)
-    Cargo.toml
-    build.rs                        # nvcc when feature=cuda
-    cuda/kernels.{cu,h}             # extern "C" CUDA shim
-    src/
-      lib.rs
-      array.rs                      # lazy Array + iterative eval
-      buffer.rs primitive.rs ops.rs
-      device.rs dtype.rs error.rs
-      device_dispatch.rs            # backend selector
-      prng.rs threefry.rs           # JAX-style splittable PRNG
-      transforms.rs                 # slice_axis0, stack, vmap_apply
-      cpu/{mod,kernels,random,backend}.rs
-      webgpu/{mod,shaders}.rs
-      cuda/mod.rs                   # extern "C" decls + Backend impl
-  minml-py/                         # pyo3 + maturin
-    Cargo.toml pyproject.toml
-    src/lib.rs                      # async Python surface
-  minml-wasm/                       # wasm-bindgen
-    Cargo.toml
-    index.ts                        # ESM re-export, no top-level await
-    src/lib.rs                      # async TS surface
+package.json
+tsconfig.json
+vitest.config.ts
+src/
+  index.ts                    # public re-exports
+  array.ts                    # lazy Array + iterative eval
+  buffer.ts primitive.ts
+  device.ts dtype.ts error.ts
+  deviceDispatch.ts           # backend selector
+  ops.ts                      # add, mul, dot, gather, ones, randint, distributions
+  prng.ts threefry.ts         # JAX-style splittable PRNG
+  transforms.ts               # slice_axis0, stack, vmap_apply
+  cpu/{backend,kernels,random}.ts
+  cuda/                       # optional N-API addon
+    backend.ts                # try-loads ../../build/Release/minml_cuda.node
+    kernels.{cu,h}            # CUDA kernels + extern "C" entry points
+    addon.cc                  # node-addon-api bridge
+    CMakeLists.txt            # cmake-js build
+  webgpu/{backend,shaders}.ts
+tests/
+  threefry.test.ts            # u32 wrapping correctness
+  cpu.test.ts                 # round-trip the CPU backend through the lazy graph
 examples/
-  example.py                        # async, asyncio.run
-  example.ts                        # await init(), await initWebGPU()
-  example.html                      # loads the wasm demo
-  example.js                        # tsc output
+  example.html
+  example.ts                  # browser WebGPU demo
+  tsconfig.json
 ```
-
-## Building
-
-### Rust workspace (CPU + native WebGPU)
-
-```bash
-cargo build -p minml-core --features webgpu
-cargo test  -p minml-core --features webgpu
-```
-
-The `webgpu` feature is on by default. To strip wgpu out, build with
-`--no-default-features`. CUDA is gated behind `--features cuda`; the
-shim compiles only on a host with `nvcc` on `PATH`.
-
-### Python bindings
-
-```bash
-uv venv
-source .venv/bin/activate
-uv pip install maturin
-cd crates/minml-py
-maturin develop --release
-python ../../examples/example.py
-```
-
-On a CUDA host (Linux/Windows with `nvcc` on `PATH`), build with the
-CUDA backend linked in:
-
-```bash
-maturin develop --release --features cuda
-```
-
-The `cuda` feature forwards through to `minml-core`, which compiles
-`crates/minml-core/cuda/kernels.cu` via `cc::Build::cuda(true)` and
-links `cudart`. Then the Python example just flips one line:
-
-```python
-device = m.Device.CUDA   # was m.Device.CPU
-```
-
-Same async API on every backend — readbacks like `await m.add(x,
-y).tolist()` work uniformly. WebGPU is also available via `await
-m.init_webgpu()` + `Device.WebGPU`.
-
-### TypeScript / browser (WebGPU + WASM)
-
-```bash
-cd crates/minml-wasm
-wasm-pack build --target web --release
-# Compile examples/example.ts -> examples/example.js
-(cd ../../examples && tsc)
-# Serve from the workspace root.
-cd ../..
-python -m http.server 8000
-```
-
-Open <http://localhost:8000/examples/example.html> in a Chromium-family
-browser. `await init()` instantiates the wasm module; `await
-initWebGPU()` acquires a device through wgpu (which calls
-`navigator.gpu` under the hood — no Asyncify, no spin loop). Readbacks
-suspend on `Buffer::slice.map_async` and surface as Promises on the JS
-side.
 
 ## What's deliberately missing
 
-Same scope as the C++ original; this is meant to demonstrate the
+Same scope as the original Rust port; this is meant to demonstrate the
 *shape*, not be a real ML lib.
 
-* **Only float32 / int32, only 1-D** for ops; gather/sample carry
-  multi-dim. Adding shape/strides/more dtypes is mechanical.
-* **No fusion, scheduling, or streams.** `eval()` is iterative
-  post-order. The hooks for a real evaluator go on `Primitive::eval`
-  but are unused here.
-* **WebGPU `dot` uses an `atomicCompareExchangeWeak` loop on a
+- **Only float32 / int32**, multi-dim shapes but no broadcasting.
+- **No fusion, scheduling, or streams.** `eval()` is iterative
+  post-order; nothing rewrites the graph.
+- **WebGPU `dot` uses an `atomicCompareExchangeWeak` loop on a
   u32-cast f32** — cheapest one-pass float reduction in WGSL. For real
   workloads do a multi-pass reduction.
-* **No staging-buffer pool for WebGPU readback.** Each `tolist()`
+- **No staging-buffer pool for WebGPU readback.** Each `tolist()`
   round-trips a fresh `MapRead` buffer.
-* **CUDA scope = add / mul / dot only.** Random ops and gather stay
-  CPU-only on every backend (matches the C++ original).
-* **vmap is CPU-only**, loop-based — `slice_axis0` and `stack` throw
-  on non-CPU. A graph-transformation vmap (per-primitive batching
-  rules) would lift this restriction; the `Primitive::eval` shape is
-  ready for it.
-* **Wasm vmap pytree returns are not supported.** The Python binding
-  walks `__dict__` to collect Array leaves from a class instance and
-  rebuild a fresh one; the wasm binding would need wasm-bindgen
-  `instanceof` support that 0.2 doesn't expose for `#[wasm_bindgen]`
-  structs. JS callers can return a single `Array` or a JS array of
-  `Array`; for class-shaped returns, destructure manually.
+- **vmap is CPU-only**, loop-based — `slice_axis0` and `stack` throw on
+  non-CPU. A graph-transformation vmap (per-primitive batching rules)
+  would lift this restriction; the `Primitive` shape is ready for it.
+- **`Normal::sample`** is unimplemented (kept as a placeholder; matches
+  the original).
+
+## Notes
+
+This is a TypeScript port of an earlier Rust implementation. The Rust
+source lives in git history (commits before the TS port) for anyone who
+wants to compare the two. Native CPU SIMD, multi-threaded eval, and CUDA
+all left with the Rust code — bringing them back would mean dropping back
+into a native FFI surface (Node N-API, Wasm, or PyO3).
